@@ -33,13 +33,13 @@ For me
   - ADD codeblock that creates and saves csv output.csv  
 
 REPO requirements
-`./droot`: root directory for IUROPA workshop 
-`./_day2:`: directory for specific text exercise. 
-`project.RPROJECT`: Rproject of QMD file.
-`working_with_text.cvs`: Trimmed version of the IUROPA DB for workshop.
-`custom_functions.r`: Script with costum functions for exercises. 
-`main_notebook.qmd`: Main .qmd file with exercises and examples.
-`_figures`: main diretory where figures are saved.
+- `./droot`: root directory for IUROPA workshop
+- `./_day2:`: directory for specific text exercise.
+- `project.RPROJECT`: Rproject of QMD file.
+- `working_with_text.cvs`: Trimmed version of the IUROPA DB for workshop.
+- `custom_functions.r`: Script with costum functions for exercises.
+- `main_notebook.qmd`: Main .qmd file with exercises and examples.
+- `_figures`: main diretory where figures are saved.
 
 
 NOTE we're creating a project and a dirs so that it makes it easier to work with relative paths.
