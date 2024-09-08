@@ -6,6 +6,8 @@ format:
     incremental: true
     logo: logo.png
     theme: dark
+html-math-method: mathjax
+# bibliography: mybibfile.bib
 ---
 
 
