@@ -31,6 +31,7 @@ library(lubridate)
 library(tidyverse)
 library(conflicted)
 library(openxlsx)
+library(ggplot2)
 conflict_prefer("select", "dplyr")
 conflict_prefer("filter", "dplyr")
 
@@ -167,7 +168,7 @@ iu_full_data <- iu_full_data |>
   rename(celex_judgement = celex)
 
 ## LET's verify we corretcly rename
-iu_full_data$celex_judgement[1:10] # <- Why do I add [1:10]
+iu_full_data$celex_judgement[1:10] # <- Why do I add [1:10] ?
 
 # CREATE variable of cases that are preliminary references
 ## USING case_when()
@@ -180,70 +181,189 @@ iu_full_data <- iu_full_data |>
            ))
 
 # What is the usefulness of iuropa id variables?
-glimpse(iu_full_data)
-
+glimpse(iu_full_data$cjeu_proceeding_id)
 unique(iu_full_data$proceeding_suffix)
 table(iu_full_data$proceeding_suffix)
 
 # USING export excel as information source
 glimpse(iu_full_data)
 
-# FILTER SAVE csv
-export_data <- iu_full_data |> 
+# FILTER SAVE to EXCEL file
+export_data <- iu_full_data |>
   filter(court == "Court of Justice" & dummy_pre_ruling == 1 &
            proceeding_suffix == "PPU") |>
-  select(ecli, proceeding_name, celex_judgement)
+  select(cjeu_proceeding_id, ecli, proceeding_name, celex_judgement)
 
 glimpse(export_data)
 
-# SAVE EXCEL for another time
+# SAVE EXCEL for another time!
 write.xlsx(x = export_data,
            file = "ppu_exportdata.xlsx",
            overwrite = TRUE)
 
-# [?] separate_longer_delim(cols = list_referring_national_courts,
-#                       delim = ";") |>
-separate_longer_delim()
 
+
+
+# Expanding Dataframes: Change of unit of analysis
+
+## LET's filter on prelimary rulings again but all columns
+expanded_data <- iu_full_data |>
+  filter(court == "Court of Justice" & dummy_pre_ruling == 1)
+
+## What is my unit of analysis? hint: each row is...
+glimpse(expanded_data) # OR have a look at vars...
+
+## Lets change it to national courts (because of joined cases)
+expanded_data2 <- expanded_data |>
+  separate_longer_delim(cols = list_referring_national_courts,
+                        delim = ",")
+
+### [?] What is a delimiter [?]
+expanded_data$list_referring_national_courts[20:20]
+
+
+# What happens to the number of rows?
+nrow(expanded_data) # <- How many before ?
+nrow(expanded_data2) # <- How many after ?
+
+# What happens to row values?
+expanded_data$list_referring_national_courts[20:21] # <- Values before
+expanded_data2$list_referring_national_courts[20:22] # <- Values after
+
+# <> Checkpoint <>
 #######################################
 # 6. Basic Visualizations		   ----
-# [ ] CREATE some basic visuzalization
 
-## EXAMPLE 1 One that leverages time
+## EXAMPLE 1: What Court takes the longest to deliver judgements since Lisbon?
+### FILTER $decision_date all judgements after 1 December 2009
+### SELECT $court, $duration_days $year
+### GROUPBY $court, $decision_year CALCULATE median() for duration_days
+### USE GGPLOT2 AND save as png
+example1_data <- iu_full_data |>
+  filter(decision_date >= "2008-12-01") |>
+  select(court, decision_year, duration_days) |>
+  group_by(court, decision_year) |>
+  summarize(median_duration = median(duration_days))
+
+# LET's see if the data looks right! :)
+table(example1_data$median_duration)
+
+# USING GGPLOT2 lets make bar graph
+example1_plot <- example1_data |>
+  ggplot(aes(x = factor(decision_year), y = median_duration, fill = court)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  labs(
+    title = "Median Duration per Decision Year by Court",
+    x = "Decision Year",
+    y = "Median Duration (Days)",
+    fill = "Court"
+  ) +
+  scale_fill_discrete() +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# LET's display the plot
+print(example1_plot)
+
+# SAVING plot as png and make it look nice
+ggsave("nice_plot1.pdf", plot = example1_plot,
+       width = 16,
+       height = 9,
+       units = "in",
+       dpi = 300)
+
+## EXAMPLE 2 When does the ECJ decides backlog cases?
+### FILTER $court is European Court of Justice
+### SELECT $decision_date, $duration_days
+### GGPLOT2 scatter_plot() export to .png
+
+example2_data <- iu_full_data |>
+  filter(court == "Court of Justice") |>
+  select(decision_date, duration_days)
+
+example2_plot <- example2_data |>
+  ggplot(aes(x = decision_date,
+             y = duration_days)) +
+  geom_point(color = "skyblue") +
+  geom_smooth(color = "darkblue", fill = "cornflowerblue") +
+  labs(x = "Judgement Date", y = "Duration in Days (lodge to judgement)") +
+  theme_classic()
+example2_plot
 
 
-## EXAMPLE 2 One that leverages list_referring_national_courts
+# SAVING plot as png and make it look nice
+ggsave("nice_plot2.png", plot = example2_plot,
+       width = 8,
+       height = 6,
+       units = "in",
+       dpi = 300)
 
+## EXAMPLE 3 What are the top 10 National Courts have referred the most?
+### FILTER $dummy_pre_ruling
+### SELECT $list_referring_national_courts , $iuropa_case_id
+### SEPARATE ROWS courts  separate_longer_delim( )
+### RENAME $list_referring_national_courts to $national_court
+### GROUPBY $national_court count totalcases using  n()
+### ARRANGE $cases AND select top 10
+### USE GGPLOT2 and EXPORT to .pdf
 
-## EXAMPLE 3 One that leverages member states counts
+example3_data <-  iu_full_data |>
+  filter(dummy_pre_ruling == 1) |>
+  select(list_referring_national_courts, iuropa_case_id) |>
+  separate_longer_delim(cols = list_referring_national_courts,
+                        delim = ",") |>
+  rename(national_court = list_referring_national_courts) |>
+  group_by(national_court) |>
+  summarize(cases = n()) |>
+  arrange(desc(cases)) 	|>
+  head(10)
 
+# Another way of selecting TOP10 observations?
+example3_plot <- example3_data |>
+  ggplot(aes(x = fct_reorder(national_court, cases),
+             y = cases)) +
+  geom_bar(stat = "identity",
+           fill = "steelblue",
+           color = "steelblue4") +
+  coord_flip() +
+  labs(x = "Referring National Court",
+       y = "Count of Preliminary References") +
+  theme_classic()
 
+# CAN we change the extension when exporting?
+# SAVING plot as png and make it look nice
+ggsave("nice_plot3.pdf", plot = example3_plot,
+       width = 10,
+       height = 4,
+       units = "in",
+       dpi = 300)
+
+# <> Checkpoint <>
 #######################################
 # 7. Excercises					   ----
-
-## Excercise 1 What ECJ formations takes longest delivering judgments?
-### 0. SELECT judgments, formation, and duration_days
-### 1. FILTER court is "Court of Justice" to do ECJ formations only.
-### 2. USE geom_bar()
-### 3. VISUALIZE the results.
-
+## Excercise 1 What ECJ formations takes the longest delivering judgments?
+### 1. FILTER $court is "Court of Justice" to get ECJ formations only.
+### 2. SELECT $judgments, $formation, and $duration_days
+### 3. USE geom_bar() to tell R how do it.
+### 4. VISUALIZE the results.
 
 
-
-## Excercise 2 What court delivers the most judgments per month?
-### 1. GROUPBY "month" and "court" and n()
-### 2. USE geom_bar()
-### 3. VISUALIZE the results.
-
-
+## Excercise 2 When CJEU courts decide backlog cases?
+### 1. CREATE a scattter using variable for each court.
+### 2  SELECT $decision_date $duration_days $court
+### 3. USE geom_point() + facetwrap() to tell R how do it.
+### 4. VISUALIZE the results.
 
 
-## Excercise 3 What month of year delivers most judgements by court?
-### 1. CREATE a scattter using month variable for each court.
-### 2. USE geom_point() +  facetwrap() to make R do it.
-### 3. VISUALIZE the results.
-
-
+## Excercise 3 What member state has reffered the most?
+### 1. CREATE a bar plot with counts of member state referrals.
+### 2. SELECT $list_referring_national_courts,
+###        $iuropa_case_id and $list_referring_member_states
+### 3. SEPARATE ROWS courts separate_longer_delim()
+### 4. RENAME list_referring_member_states = member_state
+### 5. GROUPBY $national_court count totalcases using  n()
+### 6. USE geom_bar() to tell R how do it.
+### 7. VISUALIZE the results.
 
 
 #######################################
@@ -251,9 +371,17 @@ separate_longer_delim()
 # rscript: a text file that contains R-code that can be executed in R-Studio.
 # directory: a fancy name for folder on your system. The intuition for directory is that its an actual address where the file lives # nolint
 # cwd: current working directory, the folder where your script is being executed. By default, is the same folder where your r-scripy lives.   # nolint
-# assign: <-
+# assign: <- the arrow pointing left is know as assign operator.
+# select a var: the $ the dollar sign is used to select a single var.
+# LIBRARIES ###########################
 # readxl: library for working with Excel files in R (reading only), see: https://readxl.tidyverse.org/ # nolint
 # openxlsx: library for creating, editing, and writing Excel files in R, see: https://ycphs.github.io/openxlsx/ # nolint
+# ggplot2: library for creating complex and customizable visualizations in R, part of the tidyverse, see: https://ggplot2.tidyverse.org/ # nolint
+# lubridate: library for working with dates and times in R, parse, manipulate, and analyze date-time data, see: https://lubridate.tidyverse.org/ # nolint
+# tidyverse: a collection of R packages designed for data science, including dplyr, ggplot2, and others, providing tools for data manipulation, visualization, and more, see: https://www.tidyverse.org/ # nolint
+
+
+
 
 
 #######################################
